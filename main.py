@@ -1,10 +1,20 @@
 import fitz  # PyMuPDF
 from fastapi import FastAPI, UploadFile, Form
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 import base64
 from io import BytesIO
 
 app = FastAPI()
+
+# ✅ Enable CORS (allow all origins)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # allow all methods
+    allow_headers=["*"],  # allow all headers
+)
 
 @app.post("/sign-pdf/")
 async def sign_pdf(
