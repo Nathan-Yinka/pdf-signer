@@ -27,11 +27,11 @@ async def sign_pdf(
     height_percent: float = Form(...),
     signature_image: str = Form(...)
 ):
-    # Decode base64 image
+    # Decode base64 signature image
     header, encoded = signature_image.split(",", 1)
     signature_bytes = base64.b64decode(encoded)
 
-    # Read and open PDF
+    # Read and open the PDF
     pdf_bytes = await pdf_file.read()
     pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
 
@@ -40,33 +40,22 @@ async def sign_pdf(
     page_width = page_obj.rect.width
     page_height = page_obj.rect.height
 
-    # # Convert % to points
-    # x_pt = (x_percent / 100.0) * page_width
-    # y_pt = (y_percent / 100.0) * page_height
-    # width_pt = (width_percent / 100.0) * page_width
-    # height_pt = (height_percent / 100.0) * page_height
-
-    # # Flip Y for PDF coordinate system
-    # real_y = page_height - y_pt - height_pt
-
-    # Convert % to points
+    # ✅ Convert percentages to points (assuming origin at top-left)
     x_pt = (x_percent / 100.0) * page_width
-    y_pt = (y_percent / 100.0) * page_height
+    y_percent_flipped = 100.0 - y_percent  # Flip Y to match PDF coord
+    y_pt = (y_percent_flipped / 100.0) * page_height
     width_pt = (width_percent / 100.0) * page_width
     height_pt = (height_percent / 100.0) * page_height
 
-    # Adjust x/y if they represent the center of the signature
-    x_pt = x_pt - (width_pt / 2)
-    y_pt = y_pt - (height_pt / 2)
-
-    # Flip Y for PDF coordinate system
-    real_y = page_height - y_pt - height_pt
+    # Adjust x/y if percent coords are based on the center
+    x_pt -= width_pt / 2
+    y_pt -= height_pt / 2
 
     # Insert image
-    rect = fitz.Rect(x_pt, real_y, x_pt + width_pt, real_y + height_pt)
+    rect = fitz.Rect(x_pt, y_pt, x_pt + width_pt, y_pt + height_pt)
     page_obj.insert_image(rect, stream=signature_bytes)
 
-    # Return signed PDF
+    # Return the signed PDF
     output = BytesIO()
     pdf.save(output)
     pdf.close()
@@ -76,7 +65,7 @@ async def sign_pdf(
         "Content-Disposition": "attachment; filename=signed.pdf"
     })
 
-# 👇 This lets you run with: python main.py
+# 👇 Local development entry point
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
