@@ -14,6 +14,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],  # allow all methods
     allow_headers=["*"],  # allow all headers
+    expose_headers=["Content-Disposition"],
 )
 
 @app.post("/sign-pdf/")
