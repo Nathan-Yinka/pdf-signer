@@ -4,16 +4,17 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import base64
 from io import BytesIO
+from PIL import Image
 
 app = FastAPI()
 
-# ✅ Enable CORS (allow all origins)
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # allow all methods
-    allow_headers=["*"],  # allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
 
@@ -21,51 +22,58 @@ app.add_middleware(
 async def sign_pdf(
     pdf_file: UploadFile,
     page: int = Form(...),
-    x_percent: float = Form(...),
-    y_percent: float = Form(...),
-    width_percent: float = Form(...),
-    height_percent: float = Form(...),
+    x_percent: float = Form(...),  # From left side
+    y_percent: float = Form(...),  # From top side
     signature_image: str = Form(...)
 ):
-    # Decode base64 signature image
-    header, encoded = signature_image.split(",", 1)
+    # Decode base64 image
+    _, encoded = signature_image.split(",", 1)
     signature_bytes = base64.b64decode(encoded)
 
-    # Read and open the PDF
+    # Get image size in pixels
+    img = Image.open(BytesIO(signature_bytes))
+    img_width_px, img_height_px = img.size
+
+    # Read PDF
     pdf_bytes = await pdf_file.read()
     pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
-
-    # Get page size
     page_obj = pdf[page - 1]
-    page_width = page_obj.rect.width
-    page_height = page_obj.rect.height
+    page_width, page_height = page_obj.rect.width, page_obj.rect.height
 
-    # ✅ Convert percentages to points (assuming origin at top-left)
+    # Scale image proportionally (reasonable width)
+    max_img_width_pt = 150
+    scale_ratio = max_img_width_pt / img_width_px
+    img_width_pt = max_img_width_pt
+    img_height_pt = img_height_px * scale_ratio
+
+    # Corrected and simplified Y calculation
     x_pt = (x_percent / 100.0) * page_width
-    y_percent_flipped = y_percent  # Flip Y to match PDF coord
-    y_pt = (y_percent_flipped / 100.0) * page_height
-    width_pt = (width_percent / 100.0) * page_width
-    height_pt = (height_percent / 100.0) * page_height
+    y_top = page_height * ((y_percent) / 100.0)  # ✅ your correct formula
 
-    # Adjust x/y if percent coords are based on the center
-    x_pt -= width_pt / 2
-    y_pt -= height_pt / 2
+    # Anchor image from top-left
+    rect = fitz.Rect(
+        x_pt,
+        y_top - img_height_pt,
+        x_pt + img_width_pt,
+        y_top
+    )
 
-    # Insert image
-    rect = fitz.Rect(x_pt, y_pt, x_pt + width_pt, y_pt + height_pt)
+    # Insert the image
     page_obj.insert_image(rect, stream=signature_bytes)
 
-    # Return the signed PDF
+    # Return signed PDF
     output = BytesIO()
     pdf.save(output)
     pdf.close()
     output.seek(0)
 
-    return StreamingResponse(output, media_type="application/pdf", headers={
-        "Content-Disposition": "attachment; filename=signed.pdf"
-    })
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=signed.pdf"}
+    )
 
-# 👇 Local development entry point
+# Run locally
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
