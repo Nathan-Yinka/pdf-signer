@@ -42,7 +42,7 @@ async def sign_pdf(
 
     # ✅ Convert percentages to points (assuming origin at top-left)
     x_pt = (x_percent / 100.0) * page_width
-    y_percent_flipped = 100.0 - y_percent  # Flip Y to match PDF coord
+    y_percent_flipped = y_percent  # Flip Y to match PDF coord
     y_pt = (y_percent_flipped / 100.0) * page_height
     width_pt = (width_percent / 100.0) * page_width
     height_pt = (height_percent / 100.0) * page_height
